@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma.service';
+import { MailService } from '../mail/mail.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import * as bcrypt from 'bcryptjs';
@@ -10,6 +11,7 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private mailService: MailService,
   ) {}
 
   async register(registerDto: RegisterDto) {
@@ -84,6 +86,17 @@ export class AuthService {
 
     // Omit password from return
     const { passwordHash: _, ...result } = newUser;
+
+    // Send welcome email asynchronously
+    this.mailService.sendWelcomeEmail(
+      newUser.email,
+      newUser.fullName,
+      newUser.employeeId,
+      defaultPassword,
+    ).catch(err => {
+      console.error(`Failed to send welcome email to ${newUser.email}:`, err);
+    });
+
     return {
       message: `Employee registered successfully. Default password is '${defaultPassword}'`,
       user: result,

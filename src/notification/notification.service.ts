@@ -1,10 +1,14 @@
 import { Injectable, UnauthorizedException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { NotificationType } from '@prisma/client';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class NotificationService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private mailService: MailService,
+  ) {}
 
   async findAllForUser(userId: string) {
     return this.prisma.notification.findMany({
@@ -57,16 +61,17 @@ export class NotificationService {
             select: {
               id: true,
               fullName: true,
-              teamLeadId: true,
-              deliveryManagerId: true,
-              vicePresidentId: true,
+              email: true,
+              teamLead: { select: { id: true, email: true, fullName: true } },
+              deliveryManager: { select: { id: true, email: true, fullName: true } },
+              vicePresident: { select: { id: true, email: true, fullName: true } },
             },
           },
           project: {
             select: {
               id: true,
               name: true,
-              salesOwnerId: true,
+              salesOwner: { select: { id: true, email: true, fullName: true } },
             },
           },
         },
@@ -76,14 +81,22 @@ export class NotificationService {
         const timeLabel = offset === 0 ? 'today' : `in ${offset} days`;
         const message = `Trial period for ${trial.employee.fullName} in project '${trial.project.name}' is ending ${timeLabel} (on ${trial.trialEndDate.toISOString().split('T')[0]}). Please complete reviews.`;
 
-        const recipients = new Set<string>();
-        recipients.add(trial.employee.id); // Developer
-        if (trial.employee.teamLeadId) recipients.add(trial.employee.teamLeadId); // TL
-        if (trial.employee.deliveryManagerId) recipients.add(trial.employee.deliveryManagerId); // DM
-        if (trial.employee.vicePresidentId) recipients.add(trial.employee.vicePresidentId); // VP
-        if (trial.project.salesOwnerId) recipients.add(trial.project.salesOwnerId); // Sales Owner
+        const recipients = new Map<string, { email: string; fullName: string }>();
+        recipients.set(trial.employee.id, { email: trial.employee.email, fullName: trial.employee.fullName });
+        if (trial.employee.teamLead) {
+          recipients.set(trial.employee.teamLead.id, { email: trial.employee.teamLead.email, fullName: trial.employee.teamLead.fullName });
+        }
+        if (trial.employee.deliveryManager) {
+          recipients.set(trial.employee.deliveryManager.id, { email: trial.employee.deliveryManager.email, fullName: trial.employee.deliveryManager.fullName });
+        }
+        if (trial.employee.vicePresident) {
+          recipients.set(trial.employee.vicePresident.id, { email: trial.employee.vicePresident.email, fullName: trial.employee.vicePresident.fullName });
+        }
+        if (trial.project.salesOwner) {
+          recipients.set(trial.project.salesOwner.id, { email: trial.project.salesOwner.email, fullName: trial.project.salesOwner.fullName });
+        }
 
-        for (const recipientId of recipients) {
+        for (const [recipientId, info] of recipients.entries()) {
           await this.prisma.notification.create({
             data: {
               recipientId,
@@ -91,6 +104,16 @@ export class NotificationService {
               type: NotificationType.TRIAL_REMINDER,
             },
           });
+
+          this.mailService.sendExpirationReminderEmail(
+            info.email,
+            info.fullName,
+            'trial',
+            message,
+          ).catch(err => {
+            console.error(`Failed to send trial reminder email to ${info.email}:`, err);
+          });
+
           createdCount++;
         }
       }
@@ -111,16 +134,17 @@ export class NotificationService {
             select: {
               id: true,
               fullName: true,
-              teamLeadId: true,
-              deliveryManagerId: true,
-              vicePresidentId: true,
+              email: true,
+              teamLead: { select: { id: true, email: true, fullName: true } },
+              deliveryManager: { select: { id: true, email: true, fullName: true } },
+              vicePresident: { select: { id: true, email: true, fullName: true } },
             },
           },
           project: {
             select: {
               id: true,
               name: true,
-              salesOwnerId: true,
+              salesOwner: { select: { id: true, email: true, fullName: true } },
             },
           },
         },
@@ -130,14 +154,22 @@ export class NotificationService {
         const timeLabel = offset === 0 ? 'today' : `in ${offset} days`;
         const message = `Contract for ${contract.employee.fullName} in project '${contract.project.name}' is ending ${timeLabel} (on ${contract.contractEndDate.toISOString().split('T')[0]}). Please review renewals.`;
 
-        const recipients = new Set<string>();
-        recipients.add(contract.employee.id); // Developer
-        if (contract.employee.teamLeadId) recipients.add(contract.employee.teamLeadId);
-        if (contract.employee.deliveryManagerId) recipients.add(contract.employee.deliveryManagerId);
-        if (contract.employee.vicePresidentId) recipients.add(contract.employee.vicePresidentId);
-        if (contract.project.salesOwnerId) recipients.add(contract.project.salesOwnerId);
+        const recipients = new Map<string, { email: string; fullName: string }>();
+        recipients.set(contract.employee.id, { email: contract.employee.email, fullName: contract.employee.fullName });
+        if (contract.employee.teamLead) {
+          recipients.set(contract.employee.teamLead.id, { email: contract.employee.teamLead.email, fullName: contract.employee.teamLead.fullName });
+        }
+        if (contract.employee.deliveryManager) {
+          recipients.set(contract.employee.deliveryManager.id, { email: contract.employee.deliveryManager.email, fullName: contract.employee.deliveryManager.fullName });
+        }
+        if (contract.employee.vicePresident) {
+          recipients.set(contract.employee.vicePresident.id, { email: contract.employee.vicePresident.email, fullName: contract.employee.vicePresident.fullName });
+        }
+        if (contract.project.salesOwner) {
+          recipients.set(contract.project.salesOwner.id, { email: contract.project.salesOwner.email, fullName: contract.project.salesOwner.fullName });
+        }
 
-        for (const recipientId of recipients) {
+        for (const [recipientId, info] of recipients.entries()) {
           await this.prisma.notification.create({
             data: {
               recipientId,
@@ -145,6 +177,16 @@ export class NotificationService {
               type: NotificationType.CONTRACT_REMINDER,
             },
           });
+
+          this.mailService.sendExpirationReminderEmail(
+            info.email,
+            info.fullName,
+            'contract',
+            message,
+          ).catch(err => {
+            console.error(`Failed to send contract reminder email to ${info.email}:`, err);
+          });
+
           createdCount++;
         }
 
