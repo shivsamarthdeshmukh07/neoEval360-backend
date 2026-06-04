@@ -14,7 +14,7 @@ export class AuthService {
     private mailService: MailService,
   ) {}
 
-  async register(registerDto: RegisterDto) {
+  async register(registerDto: RegisterDto, creator?: { fullName: string; email: string }) {
     const existingUser = await this.prisma.user.findFirst({
       where: {
         OR: [
@@ -93,6 +93,7 @@ export class AuthService {
       newUser.fullName,
       newUser.employeeId,
       defaultPassword,
+      creator,
     ).catch(err => {
       console.error(`Failed to send welcome email to ${newUser.email}:`, err);
     });

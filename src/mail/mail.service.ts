@@ -62,8 +62,22 @@ export class MailService {
     }
   }
 
-  async sendEmail(to: string, subject: string, html: string, text: string) {
-    const from = process.env.SMTP_FROM || '"NeoEval360" <noreply@neoeval360.com>';
+  async sendEmail(
+    to: string, 
+    subject: string, 
+    html: string, 
+    text: string, 
+    options?: { fromName?: string; replyTo?: string }
+  ) {
+    const defaultFrom = process.env.SMTP_FROM || '"NeoEval360" <noreply@neoeval360.com>';
+    let from = defaultFrom;
+
+    if (options?.fromName) {
+      const emailMatch = defaultFrom.match(/<(.+)>/);
+      const email = emailMatch ? emailMatch[1] : 'noreply@neoeval360.com';
+      from = `"${options.fromName} (via NeoEval360)" <${email}>`;
+    }
+
     try {
       const transporter = await this.getTransporter();
       const info = await transporter.sendMail({
@@ -72,6 +86,7 @@ export class MailService {
         subject,
         html,
         text,
+        replyTo: options?.replyTo,
       });
 
       this.logger.log(`Email sent: ${info.messageId}`);
@@ -86,13 +101,20 @@ export class MailService {
     }
   }
 
-  async sendWelcomeEmail(to: string, name: string, employeeId: string, defaultPassword: string) {
+  async sendWelcomeEmail(
+    to: string, 
+    name: string, 
+    employeeId: string, 
+    defaultPassword: string,
+    creator?: { fullName: string; email: string }
+  ) {
     const subject = 'Welcome to NeoEval360 - Your Account Details';
+    const creatorText = creator ? `<p>Your account has been created by <strong>${creator.fullName}</strong> (${creator.email}). Here are your login credentials to access the platform:</p>` : `<p>Your account has been created by the System Administrator. Here are your login credentials to access the platform:</p>`;
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
         <h2 style="color: #4f46e5; margin-bottom: 20px;">Welcome to NeoEval360!</h2>
         <p>Dear <strong>${name}</strong>,</p>
-        <p>Your account has been created by the System Administrator. Here are your login credentials to access the platform:</p>
+        ${creatorText}
         <table style="width: 100%; border-collapse: collapse; margin: 20px 0; background-color: #f9fafb; border-radius: 5px;">
           <tr>
             <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; font-weight: bold; width: 150px;">Employee ID:</td>
@@ -113,9 +135,12 @@ export class MailService {
         </p>
       </div>
     `;
-    const text = `Welcome to NeoEval360!\n\nDear ${name},\n\nYour account has been created. Here are your credentials:\nEmployee ID: ${employeeId}\nLogin Email: ${to}\nDefault Password: ${defaultPassword}\n\nLogin URL: https://neo-eval360-backend.vercel.app`;
+    const text = `Welcome to NeoEval360!\n\nDear ${name},\n\nYour account has been created by ${creator ? creator.fullName : 'the System Administrator'}. Here are your credentials:\nEmployee ID: ${employeeId}\nLogin Email: ${to}\nDefault Password: ${defaultPassword}\n\nLogin URL: https://neo-eval360-backend.vercel.app`;
     
-    return this.sendEmail(to, subject, html, text);
+    return this.sendEmail(to, subject, html, text, {
+      fromName: creator?.fullName,
+      replyTo: creator?.email,
+    });
   }
 
   async sendExpirationReminderEmail(to: string, name: string, type: 'trial' | 'contract', message: string) {
