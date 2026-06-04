@@ -166,4 +166,30 @@ export class MailService {
 
     return this.sendEmail(to, subject, html, text);
   }
+
+  async sendPasswordResetEmail(to: string, name: string, token: string) {
+    const subject = 'Reset Your NeoEval360 Password';
+    const frontendUrl = process.env.FRONTEND_URL || 'https://neo-eval360-backend.vercel.app';
+    const resetLink = `${frontendUrl}/reset-password?token=${token}`;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+        <h2 style="color: #4f46e5; margin-bottom: 20px;">Password Reset Request</h2>
+        <p>Dear <strong>${name}</strong>,</p>
+        <p>We received a request to reset your password for your NeoEval360 account. Please click the button below to set a new password. This link is valid for 15 minutes.</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${resetLink}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Reset Password</a>
+        </div>
+        <p>If the button doesn't work, you can copy and paste the following URL into your browser:</p>
+        <p style="word-break: break-all; background-color: #f3f4f6; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 0.9em; color: #374151;">${resetLink}</p>
+        <p style="margin-top: 20px; color: #6b7280; font-size: 0.9em;">If you did not request this password reset, please ignore this email. Your password will remain unchanged.</p>
+        <p style="color: #6b7280; font-size: 0.9em; margin-top: 30px; border-top: 1px solid #e5e7eb; padding-top: 15px;">
+          This is an automated system email. Please do not reply directly to this message.
+        </p>
+      </div>
+    `;
+    const text = `Reset Your NeoEval360 Password\n\nDear ${name},\n\nWe received a request to reset your password for your NeoEval360 account. Please visit the following link to set a new password (valid for 15 minutes):\n\n${resetLink}\n\nIf you did not request this reset, you can safely ignore this email.`;
+
+    return this.sendEmail(to, subject, html, text);
+  }
 }

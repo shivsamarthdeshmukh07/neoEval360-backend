@@ -118,6 +118,9 @@ model User {
   notifications         Notification[] @relation("RecipientNotifications")
   auditLogs             AuditLog[]     @relation("LoggedUser")
 
+  passwordResetToken    String?        @map("password_reset_token")
+  passwordResetExpires  DateTime?      @map("password_reset_expires")
+
   createdAt             DateTime       @default(now()) @map("created_at")
   updatedAt             DateTime       @updatedAt @map("updated_at")
 
