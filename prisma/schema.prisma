@@ -1,0 +1,296 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  AUDIT
+  VP
+  SALES_HEAD
+  SALES
+  DM
+  TL
+  DEV
+}
+
+enum EmployeeStatus {
+  TRIAL
+  CONFIRMED
+  BENCH
+  INTERNAL_PROJECT
+  NOTICE_PERIOD
+  RESIGNED
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum AllocationStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+enum TrialStatus {
+  PENDING
+  PASSED
+  FAILED
+}
+
+enum ContractStatus {
+  ACTIVE
+  EXPIRING_SOON
+  EXPIRED
+  RENEWED
+}
+
+enum EvaluationStatus {
+  DRAFT
+  SUBMITTED_SELF
+  REVIEWED_TL
+  REVIEWED_DM
+  APPROVED_VP
+  FINALIZED
+}
+
+enum NotificationType {
+  TRIAL_REMINDER
+  CONTRACT_REMINDER
+  EVALUATION_REMINDER
+  FEEDBACK_REMINDER
+}
+
+model User {
+  id                    String         @id @default(uuid())
+  employeeId            String         @unique @map("employee_id")
+  email                 String         @unique
+  passwordHash          String         @map("password_hash")
+  fullName              String         @map("full_name")
+  designation           String
+  department            String
+  joiningDate           DateTime       @map("joining_date")
+  role                  Role
+  status                EmployeeStatus @default(TRIAL)
+  skills                String[]
+  experienceYears       Decimal        @map("experience_years") @db.Decimal(4, 2)
+  certifications        String[]
+  active                Boolean        @default(true)
+
+  // Hierarchy (Self-referencing relationships)
+  parentSalesHeadId     String?        @map("parent_sales_head_id")
+  parentSalesHead       User?          @relation("SalesHierarchy", fields: [parentSalesHeadId], references: [id])
+  salesAgents           User[]         @relation("SalesHierarchy")
+
+  teamLeadId            String?        @map("team_lead_id")
+  teamLead              User?          @relation("TLHierarchy", fields: [teamLeadId], references: [id])
+  teamMembers           User[]         @relation("TLHierarchy")
+
+  deliveryManagerId     String?        @map("delivery_manager_id")
+  deliveryManager       User?          @relation("DMHierarchy", fields: [deliveryManagerId], references: [id])
+  dmReports             User[]         @relation("DMHierarchy")
+
+  vicePresidentId       String?        @map("vice_president_id")
+  vicePresident         User?          @relation("VPHierarchy", fields: [vicePresidentId], references: [id])
+  vpReports             User[]         @relation("VPHierarchy")
+
+  // Resource & Client relationships
+  clientsOwned          Client[]       @relation("ClientSalesOwner")
+  projectsOwned         Project[]      @relation("ProjectSalesOwner")
+  projectsManagedDM     Project[]      @relation("ProjectDM")
+  projectsManagedTL     Project[]      @relation("ProjectTL")
+
+  allocations           ResourceAllocation[] @relation("DeveloperAllocations")
+  allocationsRequested  ResourceAllocation[] @relation("RequestedAllocations")
+  allocationsApproved   ResourceAllocation[] @relation("ApprovedAllocations")
+
+  trials                Trial[]        @relation("TrialEmployee")
+  contracts             Contract[]     @relation("ContractEmployee")
+  evaluations           PerformanceEvaluation[] @relation("DeveloperEvaluations")
+  feedbackGiven         ContinuousFeedback[] @relation("FeedbackProvider")
+  feedbackReceived      ContinuousFeedback[] @relation("FeedbackReceiver")
+  notifications         Notification[] @relation("RecipientNotifications")
+  auditLogs             AuditLog[]     @relation("LoggedUser")
+
+  createdAt             DateTime       @default(now()) @map("created_at")
+  updatedAt             DateTime       @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Client {
+  id           String    @id @default(uuid())
+  name         String    @unique
+  salesOwnerId String    @map("sales_owner_id")
+  salesOwner   User      @relation("ClientSalesOwner", fields: [salesOwnerId], references: [id])
+  projects     Project[]
+
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("clients")
+}
+
+model Project {
+  id                 String               @id @default(uuid())
+  name               String
+  clientId           String               @map("client_id")
+  client             Client               @relation(fields: [clientId], references: [id])
+  salesOwnerId       String               @map("sales_owner_id")
+  salesOwner         User                 @relation("ProjectSalesOwner", fields: [salesOwnerId], references: [id])
+  deliveryManagerId  String               @map("delivery_manager_id")
+  deliveryManager    User                 @relation("ProjectDM", fields: [deliveryManagerId], references: [id])
+  teamLeadId         String               @map("team_lead_id")
+  teamLead           User                 @relation("ProjectTL", fields: [teamLeadId], references: [id])
+  startDate          DateTime             @map("start_date")
+  endDate            DateTime             @map("end_date")
+  contractStartDate  DateTime             @map("contract_start_date")
+  contractEndDate    DateTime             @map("contract_end_date")
+  status             ProjectStatus        @default(ACTIVE)
+  allocations        ResourceAllocation[]
+  trials             Trial[]
+  contracts          Contract[]
+
+  createdAt          DateTime             @default(now()) @map("created_at")
+  updatedAt          DateTime             @updatedAt @map("updated_at")
+
+  @@map("projects")
+}
+
+model ResourceAllocation {
+  id                   String           @id @default(uuid())
+  developerId          String           @map("developer_id")
+  developer            User             @relation("DeveloperAllocations", fields: [developerId], references: [id])
+  projectId            String           @map("project_id")
+  project              Project          @relation(fields: [projectId], references: [id])
+  allocationPercentage Int              @map("allocation_percentage")
+  startDate            DateTime         @map("start_date")
+  endDate              DateTime         @map("end_date")
+  status               AllocationStatus @default(PENDING_APPROVAL)
+  requestedById        String           @map("requested_by_id")
+  requestedBy          User             @relation("RequestedAllocations", fields: [requestedById], references: [id])
+  approvedById         String?          @map("approved_by_id")
+  approvedBy           User?            @relation("ApprovedAllocations", fields: [approvedById], references: [id])
+
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+
+  @@map("resource_allocations")
+}
+
+model Trial {
+  id                      String      @id @default(uuid())
+  employeeId              String      @map("employee_id")
+  employee                User        @relation("TrialEmployee", fields: [employeeId], references: [id])
+  projectId               String      @map("project_id")
+  project                 Project     @relation(fields: [projectId], references: [id])
+  trialStartDate          DateTime    @map("trial_start_date")
+  trialEndDate            DateTime    @map("trial_end_date")
+  clientFeedback          String?     @map("client_feedback")
+  teamLeadFeedback        String?     @map("team_lead_feedback")
+  deliveryManagerFeedback String?     @map("delivery_manager_feedback")
+  status                  TrialStatus @default(PENDING)
+  approvedByDM            Boolean     @default(false) @map("approved_by_dm")
+  approvedByVP            Boolean     @default(false) @map("approved_by_vp")
+
+  createdAt               DateTime    @default(now()) @map("created_at")
+  updatedAt               DateTime    @updatedAt @map("updated_at")
+
+  @@map("trials")
+}
+
+model Contract {
+  id                String         @id @default(uuid())
+  employeeId        String         @map("employee_id")
+  employee          User           @relation("ContractEmployee", fields: [employeeId], references: [id])
+  projectId         String         @map("project_id")
+  project           Project        @relation(fields: [projectId], references: [id])
+  contractStartDate DateTime       @map("contract_start_date")
+  contractEndDate   DateTime       @map("contract_end_date")
+  status            ContractStatus @default(ACTIVE)
+  extensionHistory  Json           @default("[]") @map("extension_history")
+
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+
+  @@map("contracts")
+}
+
+model EvaluationCycle {
+  id          String                  @id @default(uuid())
+  name        String                  @unique
+  startDate   DateTime                @map("start_date")
+  endDate     DateTime                @map("end_date")
+  active      Boolean                 @default(true)
+  evaluations PerformanceEvaluation[]
+
+  createdAt   DateTime                @default(now()) @map("created_at")
+  updatedAt   DateTime                @updatedAt @map("updated_at")
+
+  @@map("evaluation_cycles")
+}
+
+model PerformanceEvaluation {
+  id                String           @id @default(uuid())
+  developerId       String           @map("developer_id")
+  developer         User             @relation("DeveloperEvaluations", fields: [developerId], references: [id])
+  evaluationCycleId String           @map("evaluation_cycle_id")
+  evaluationCycle   EvaluationCycle  @relation(fields: [evaluationCycleId], references: [id])
+  selfRating        Int?             @map("self_rating")
+  selfFeedback      String?          @map("self_feedback")
+  tlRating          Int?             @map("tl_rating")
+  tlFeedback        String?          @map("tl_feedback")
+  dmRating          Int?             @map("dm_rating")
+  dmFeedback        String?          @map("dm_feedback")
+  vpRating          Int?             @map("vp_rating")
+  vpFeedback        String?          @map("vp_feedback")
+  status            EvaluationStatus @default(DRAFT)
+  finalScore        Decimal?         @map("final_score") @db.Decimal(3, 2)
+
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  @@map("performance_evaluations")
+}
+
+model ContinuousFeedback {
+  id           String   @id @default(uuid())
+  providerId   String   @map("provider_id")
+  provider     User     @relation("FeedbackProvider", fields: [providerId], references: [id])
+  receiverId   String   @map("receiver_id")
+  receiver     User     @relation("FeedbackReceiver", fields: [receiverId], references: [id])
+  feedbackText String   @map("feedback_text")
+  rating       Int
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("continuous_feedbacks")
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  recipientId String           @map("recipient_id")
+  recipient   User             @relation("RecipientNotifications", fields: [recipientId], references: [id])
+  message     String
+  type        NotificationType
+  read        Boolean          @default(false)
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  @@map("notifications")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation("LoggedUser", fields: [userId], references: [id])
+  action    String
+  details   Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("audit_logs")
+}
